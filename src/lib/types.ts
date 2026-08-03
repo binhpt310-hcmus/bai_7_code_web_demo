@@ -66,14 +66,6 @@ export interface Order {
   updatedAt: string;
 }
 
-export interface DbShape {
-  users: UserAccount[];
-  categories: Category[];
-  menuItems: MenuItem[];
-  orders: Order[];
-  orderItems: OrderItem[];
-}
-
 export interface OrderWithItems extends Order {
   items: OrderItem[];
 }

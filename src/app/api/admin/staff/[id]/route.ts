@@ -20,7 +20,7 @@ export async function PATCH(
     if (body.status !== "active" && body.status !== "locked") {
       return NextResponse.json({ message: "Trạng thái không hợp lệ." }, { status: 400 });
     }
-    const user = setUserStatus(id, body.status);
+    const user = await setUserStatus(id, body.status);
     if (!user) {
       return NextResponse.json(
         { message: "Không thể khóa/mở khóa tài khoản này." },
@@ -37,7 +37,7 @@ export async function PATCH(
         { status: 400 }
       );
     }
-    const user = resetUserPassword(id, body.newPassword);
+    const user = await resetUserPassword(id, body.newPassword);
     if (!user) return NextResponse.json({ message: "Không tìm thấy tài khoản." }, { status: 404 });
     return NextResponse.json({ ok: true });
   }
@@ -53,7 +53,7 @@ export async function DELETE(
   if ("error" in guard) return guard.error;
 
   const { id } = await params;
-  const ok = deleteStaffUser(id);
+  const ok = await deleteStaffUser(id);
   if (!ok) return NextResponse.json({ message: "Không thể xóa tài khoản này." }, { status: 400 });
   return NextResponse.json({ ok: true });
 }

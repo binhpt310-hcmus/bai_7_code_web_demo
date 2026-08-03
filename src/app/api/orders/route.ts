@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: "Giỏ hàng đang trống." }, { status: 400 });
   }
 
-  const result = createOrder({
+  const result = await createOrder({
     customerName: body.customerName.trim(),
     customerPhone: body.customerPhone.trim(),
     fulfillmentType: body.fulfillmentType,

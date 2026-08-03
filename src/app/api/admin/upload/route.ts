@@ -1,8 +1,8 @@
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/api-helpers";
-import { genId } from "@/lib/store";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 const ALLOWED_TYPES: Record<string, string> = {
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
 
   if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-  const filename = `${genId("img")}.${ext}`;
+  const filename = `img_${crypto.randomUUID()}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
   fs.writeFileSync(path.join(UPLOAD_DIR, filename), buffer);
 

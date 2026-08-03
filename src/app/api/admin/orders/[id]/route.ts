@@ -19,7 +19,7 @@ export async function GET(
   if ("error" in guard) return guard.error;
 
   const { id } = await params;
-  const order = getOrderById(id);
+  const order = await getOrderById(id);
   if (!order) return NextResponse.json({ message: "Không tìm thấy đơn hàng." }, { status: 404 });
   return NextResponse.json({ order });
 }
@@ -39,7 +39,7 @@ export async function PATCH(
   };
 
   if (body.action === "confirmPayment") {
-    const order = confirmOrderPayment(id, guard.session.userId);
+    const order = await confirmOrderPayment(id, guard.session.userId);
     if (!order) return NextResponse.json({ message: "Không tìm thấy đơn hàng." }, { status: 404 });
     return NextResponse.json({ order });
   }
@@ -51,7 +51,7 @@ export async function PATCH(
     if (body.status === "cancelled" && !body.cancelReason?.trim()) {
       return NextResponse.json({ message: "Vui lòng nhập lý do hủy đơn." }, { status: 400 });
     }
-    const order = updateOrderStatus(id, body.status, body.cancelReason);
+    const order = await updateOrderStatus(id, body.status, body.cancelReason);
     if (!order) return NextResponse.json({ message: "Không tìm thấy đơn hàng." }, { status: 404 });
     return NextResponse.json({ order });
   }

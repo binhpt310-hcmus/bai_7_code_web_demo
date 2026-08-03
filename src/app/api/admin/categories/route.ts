@@ -5,7 +5,7 @@ import { createCategory, getCategories } from "@/lib/repo";
 export async function GET() {
   const guard = await requireSession(["owner", "staff"]);
   if ("error" in guard) return guard.error;
-  return NextResponse.json({ categories: getCategories() });
+  return NextResponse.json({ categories: await getCategories() });
 }
 
 export async function POST(req: NextRequest) {
@@ -16,6 +16,6 @@ export async function POST(req: NextRequest) {
   if (!name?.trim()) {
     return NextResponse.json({ message: "Tên danh mục không được để trống." }, { status: 400 });
   }
-  const category = createCategory(name.trim());
+  const category = await createCategory(name.trim());
   return NextResponse.json({ category }, { status: 201 });
 }

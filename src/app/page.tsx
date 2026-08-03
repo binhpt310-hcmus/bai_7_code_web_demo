@@ -1,9 +1,9 @@
 import { getCategories, getMenuItems } from "@/lib/repo";
 import { ClientHome } from "@/components/client/ClientHome";
 
-export default function Home() {
-  const categories = getCategories();
-  const items = getMenuItems();
+export default async function Home() {
+  const categories = await getCategories();
+  const items = await getMenuItems();
 
   return <ClientHome categories={categories} items={items} />;
 }

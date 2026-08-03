@@ -3,7 +3,7 @@ import { getCategories, getMenuItems } from "@/lib/repo";
 
 export async function GET() {
   return NextResponse.json({
-    categories: getCategories(),
-    items: getMenuItems(),
+    categories: await getCategories(),
+    items: await getMenuItems(),
   });
 }

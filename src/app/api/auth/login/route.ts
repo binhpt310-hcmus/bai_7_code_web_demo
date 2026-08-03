@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: "Nhập đầy đủ tài khoản và mật khẩu." }, { status: 400 });
   }
 
-  const user = getUserByUsername(username.trim());
+  const user = await getUserByUsername(username.trim());
   if (!user || !verifyPassword(password, user.passwordHash)) {
     return NextResponse.json({ message: "Tài khoản hoặc mật khẩu không đúng." }, { status: 401 });
   }

@@ -18,7 +18,7 @@ export async function GET() {
   const guard = await requireSession(["owner"]);
   if ("error" in guard) return guard.error;
 
-  const users = getUsers().map(toSafeUser);
+  const users = (await getUsers()).map(toSafeUser);
   return NextResponse.json({ users });
 }
 
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const result = createStaffUser({ name: name.trim(), username: username.trim(), password });
+  const result = await createStaffUser({ name: name.trim(), username: username.trim(), password });
   if ("error" in result) {
     return NextResponse.json({ message: result.error }, { status: 400 });
   }

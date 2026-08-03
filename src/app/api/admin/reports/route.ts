@@ -12,6 +12,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ message: "Thiếu khoảng thời gian." }, { status: 400 });
   }
 
-  const report = getRevenueReport(from, to);
+  const report = await getRevenueReport(from, to);
   return NextResponse.json({ report });
 }

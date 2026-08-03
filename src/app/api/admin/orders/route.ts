@@ -6,6 +6,6 @@ export async function GET() {
   const guard = await requireSession(["owner", "staff"]);
   if ("error" in guard) return guard.error;
 
-  const orders = getOrders(guard.session.role === "owner" ? "all" : "recent");
+  const orders = await getOrders(guard.session.role === "owner" ? "all" : "recent");
   return NextResponse.json({ orders });
 }

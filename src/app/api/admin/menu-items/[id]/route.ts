@@ -18,7 +18,7 @@ export async function PUT(
   if (body.price !== undefined && body.price <= 0) {
     return NextResponse.json({ message: "Giá món phải lớn hơn 0." }, { status: 400 });
   }
-  const item = updateMenuItem(id, body);
+  const item = await updateMenuItem(id, body);
   if (!item) return NextResponse.json({ message: "Không tìm thấy món." }, { status: 404 });
   return NextResponse.json({ item });
 }
@@ -32,7 +32,7 @@ export async function PATCH(
 
   const { id } = await params;
   const { available } = (await req.json()) as { available: boolean };
-  const item = setMenuItemAvailability(id, available);
+  const item = await setMenuItemAvailability(id, available);
   if (!item) return NextResponse.json({ message: "Không tìm thấy món." }, { status: 404 });
   return NextResponse.json({ item });
 }
@@ -45,6 +45,6 @@ export async function DELETE(
   if ("error" in guard) return guard.error;
 
   const { id } = await params;
-  deleteMenuItem(id);
+  await deleteMenuItem(id);
   return NextResponse.json({ ok: true });
 }

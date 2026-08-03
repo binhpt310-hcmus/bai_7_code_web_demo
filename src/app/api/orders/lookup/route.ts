@@ -12,6 +12,6 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const orders = findOrdersForTracking(code, phone);
+  const orders = await findOrdersForTracking(code, phone);
   return NextResponse.json({ orders });
 }

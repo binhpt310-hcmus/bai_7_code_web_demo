@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { genId, genOrderCode, mutateDb, readDb } from "./store";
+import { supabase } from "./supabase";
 import type {
   Category,
   FulfillmentType,
@@ -12,50 +12,167 @@ import type {
   UserAccount,
 } from "./types";
 
+// This module used to read/write a local JSON file (see git history / the
+// previous store.ts). The exported function signatures, validation rules,
+// error message strings, and computed values (totals, revenue aggregation)
+// are UNCHANGED from that version - only the storage engine underneath was
+// swapped for Supabase (Postgres). Every function is now async because a
+// real network round-trip replaces a synchronous file read.
+
+function genOrderCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 5; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
+function fail(error: { message: string } | null): void {
+  if (error) throw new Error(error.message);
+}
+
+// ---------- Row -> app type mappers (snake_case DB columns -> camelCase) ----------
+
+function mapCategory(row: Record<string, unknown>): Category {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    sortOrder: row.sort_order as number,
+  };
+}
+
+function mapMenuItem(row: Record<string, unknown>): MenuItem {
+  return {
+    id: row.id as string,
+    categoryId: row.category_id as string,
+    name: row.name as string,
+    description: row.description as string,
+    price: row.price as number,
+    image: row.image as string,
+    available: row.available as boolean,
+    sortOrder: row.sort_order as number,
+  };
+}
+
+function mapUser(row: Record<string, unknown>): UserAccount {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    username: row.username as string,
+    passwordHash: row.password_hash as string,
+    role: row.role as Role,
+    status: row.status as UserAccount["status"],
+    createdAt: row.created_at as string,
+  };
+}
+
+function mapOrderItem(row: Record<string, unknown>): OrderItem {
+  return {
+    id: row.id as string,
+    orderId: row.order_id as string,
+    menuItemId: row.menu_item_id as string,
+    name: row.name as string,
+    unitPrice: row.unit_price as number,
+    quantity: row.quantity as number,
+    note: (row.note as string) ?? "",
+  };
+}
+
+function mapOrder(row: Record<string, unknown>): Order {
+  return {
+    id: row.id as string,
+    code: row.code as string,
+    customerName: row.customer_name as string,
+    customerPhone: row.customer_phone as string,
+    fulfillmentType: row.fulfillment_type as FulfillmentType,
+    tableNumber: (row.table_number as string | null) ?? null,
+    status: row.status as OrderStatus,
+    paymentStatus: row.payment_status as Order["paymentStatus"],
+    paymentConfirmedAt: (row.payment_confirmed_at as string | null) ?? null,
+    paymentConfirmedBy: (row.payment_confirmed_by as string | null) ?? null,
+    totalAmount: row.total_amount as number,
+    note: (row.note as string) ?? "",
+    cancelReason: (row.cancel_reason as string | null) ?? null,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  };
+}
+
+function mapOrderWithItems(row: Record<string, unknown>): OrderWithItems {
+  const items = (row.order_items as Record<string, unknown>[] | null) ?? [];
+  return { ...mapOrder(row), items: items.map(mapOrderItem) };
+}
+
+const ORDER_WITH_ITEMS_SELECT = "*, order_items(*)";
+
 // ---------- Categories ----------
 
-export function getCategories(): Category[] {
-  return [...readDb().categories].sort((a, b) => a.sortOrder - b.sortOrder);
+export async function getCategories(): Promise<Category[]> {
+  const { data, error } = await supabase
+    .from("categories")
+    .select("*")
+    .order("sort_order");
+  fail(error);
+  return (data ?? []).map(mapCategory);
 }
 
-export function createCategory(name: string): Category {
-  return mutateDb((db) => {
-    const cat: Category = {
-      id: genId("cat"),
-      name,
-      sortOrder: db.categories.length + 1,
-    };
-    db.categories.push(cat);
-    return cat;
-  });
+export async function createCategory(name: string): Promise<Category> {
+  const { count } = await supabase
+    .from("categories")
+    .select("*", { count: "exact", head: true });
+  const { data, error } = await supabase
+    .from("categories")
+    .insert({ name, sort_order: (count ?? 0) + 1 })
+    .select()
+    .single();
+  fail(error);
+  return mapCategory(data);
 }
 
-export function updateCategory(catId: string, name: string): Category | null {
-  return mutateDb((db) => {
-    const cat = db.categories.find((c) => c.id === catId);
-    if (!cat) return null;
-    cat.name = name;
-    return cat;
-  });
+export async function updateCategory(catId: string, name: string): Promise<Category | null> {
+  const { data, error } = await supabase
+    .from("categories")
+    .update({ name })
+    .eq("id", catId)
+    .select()
+    .maybeSingle();
+  fail(error);
+  return data ? mapCategory(data) : null;
 }
 
-export function deleteCategory(catId: string): { ok: boolean; reason?: string } {
-  return mutateDb((db) => {
-    const inUse = db.menuItems.some((m) => m.categoryId === catId);
-    if (inUse) return { ok: false, reason: "Danh mục đang có món, không thể xóa." };
-    db.categories = db.categories.filter((c) => c.id !== catId);
-    return { ok: true };
-  });
+export async function deleteCategory(catId: string): Promise<{ ok: boolean; reason?: string }> {
+  const { count } = await supabase
+    .from("menu_items")
+    .select("*", { count: "exact", head: true })
+    .eq("category_id", catId);
+  if (count && count > 0) {
+    return { ok: false, reason: "Danh mục đang có món, không thể xóa." };
+  }
+  const { error } = await supabase.from("categories").delete().eq("id", catId);
+  fail(error);
+  return { ok: true };
 }
 
 // ---------- Menu items ----------
 
-export function getMenuItems(): MenuItem[] {
-  return [...readDb().menuItems].sort((a, b) => a.sortOrder - b.sortOrder);
+export async function getMenuItems(): Promise<MenuItem[]> {
+  const { data, error } = await supabase
+    .from("menu_items")
+    .select("*")
+    .order("sort_order");
+  fail(error);
+  return (data ?? []).map(mapMenuItem);
 }
 
-export function getMenuItemById(itemId: string): MenuItem | undefined {
-  return readDb().menuItems.find((m) => m.id === itemId);
+export async function getMenuItemById(itemId: string): Promise<MenuItem | undefined> {
+  const { data, error } = await supabase
+    .from("menu_items")
+    .select("*")
+    .eq("id", itemId)
+    .maybeSingle();
+  fail(error);
+  return data ? mapMenuItem(data) : undefined;
 }
 
 export interface MenuItemInput {
@@ -67,121 +184,166 @@ export interface MenuItemInput {
   available: boolean;
 }
 
-export function createMenuItem(input: MenuItemInput): MenuItem {
-  return mutateDb((db) => {
-    const sameCat = db.menuItems.filter((m) => m.categoryId === input.categoryId);
-    const item: MenuItem = {
-      id: genId("item"),
-      ...input,
-      sortOrder: sameCat.length + 1,
-    };
-    db.menuItems.push(item);
-    return item;
-  });
+export async function createMenuItem(input: MenuItemInput): Promise<MenuItem> {
+  const { count } = await supabase
+    .from("menu_items")
+    .select("*", { count: "exact", head: true })
+    .eq("category_id", input.categoryId);
+  const { data, error } = await supabase
+    .from("menu_items")
+    .insert({
+      category_id: input.categoryId,
+      name: input.name,
+      description: input.description,
+      price: input.price,
+      image: input.image,
+      available: input.available,
+      sort_order: (count ?? 0) + 1,
+    })
+    .select()
+    .single();
+  fail(error);
+  return mapMenuItem(data);
 }
 
-export function updateMenuItem(
+export async function updateMenuItem(
   itemId: string,
   input: Partial<MenuItemInput>
-): MenuItem | null {
-  return mutateDb((db) => {
-    const item = db.menuItems.find((m) => m.id === itemId);
-    if (!item) return null;
-    Object.assign(item, input);
-    return item;
-  });
+): Promise<MenuItem | null> {
+  const payload: Record<string, unknown> = {};
+  if (input.categoryId !== undefined) payload.category_id = input.categoryId;
+  if (input.name !== undefined) payload.name = input.name;
+  if (input.description !== undefined) payload.description = input.description;
+  if (input.price !== undefined) payload.price = input.price;
+  if (input.image !== undefined) payload.image = input.image;
+  if (input.available !== undefined) payload.available = input.available;
+
+  const { data, error } = await supabase
+    .from("menu_items")
+    .update(payload)
+    .eq("id", itemId)
+    .select()
+    .maybeSingle();
+  fail(error);
+  return data ? mapMenuItem(data) : null;
 }
 
-export function setMenuItemAvailability(
+export async function setMenuItemAvailability(
   itemId: string,
   available: boolean
-): MenuItem | null {
-  return mutateDb((db) => {
-    const item = db.menuItems.find((m) => m.id === itemId);
-    if (!item) return null;
-    item.available = available;
-    return item;
-  });
+): Promise<MenuItem | null> {
+  const { data, error } = await supabase
+    .from("menu_items")
+    .update({ available })
+    .eq("id", itemId)
+    .select()
+    .maybeSingle();
+  fail(error);
+  return data ? mapMenuItem(data) : null;
 }
 
-export function deleteMenuItem(itemId: string) {
-  mutateDb((db) => {
-    db.menuItems = db.menuItems.filter((m) => m.id !== itemId);
-  });
+export async function deleteMenuItem(itemId: string): Promise<void> {
+  const { error } = await supabase.from("menu_items").delete().eq("id", itemId);
+  fail(error);
 }
 
 // ---------- Users (owner / staff) ----------
 
-export function getUsers(): UserAccount[] {
-  return [...readDb().users].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+export async function getUsers(): Promise<UserAccount[]> {
+  const { data, error } = await supabase
+    .from("users")
+    .select("*")
+    .order("created_at");
+  fail(error);
+  return (data ?? []).map(mapUser);
 }
 
-export function getUserByUsername(username: string): UserAccount | undefined {
-  return readDb().users.find(
-    (u) => u.username.toLowerCase() === username.toLowerCase()
-  );
+export async function getUserByUsername(username: string): Promise<UserAccount | undefined> {
+  const { data, error } = await supabase
+    .from("users")
+    .select("*")
+    .ilike("username", username)
+    .maybeSingle();
+  fail(error);
+  return data ? mapUser(data) : undefined;
 }
 
-export function getUserById(userId: string): UserAccount | undefined {
-  return readDb().users.find((u) => u.id === userId);
+export async function getUserById(userId: string): Promise<UserAccount | undefined> {
+  const { data, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", userId)
+    .maybeSingle();
+  fail(error);
+  return data ? mapUser(data) : undefined;
 }
 
-export function createStaffUser(input: {
+export async function createStaffUser(input: {
   name: string;
   username: string;
   password: string;
   role?: Role;
-}): UserAccount | { error: string } {
-  return mutateDb((db) => {
-    const exists = db.users.some(
-      (u) => u.username.toLowerCase() === input.username.toLowerCase()
-    );
-    if (exists) return { error: "Email/số điện thoại này đã được sử dụng." };
-    const user: UserAccount = {
-      id: genId("user"),
+}): Promise<UserAccount | { error: string }> {
+  const existing = await getUserByUsername(input.username);
+  if (existing) return { error: "Email/số điện thoại này đã được sử dụng." };
+
+  const { data, error } = await supabase
+    .from("users")
+    .insert({
       name: input.name,
       username: input.username,
-      passwordHash: bcrypt.hashSync(input.password, 10),
+      password_hash: bcrypt.hashSync(input.password, 10),
       role: input.role ?? "staff",
       status: "active",
-      createdAt: new Date().toISOString(),
-    };
-    db.users.push(user);
-    return user;
-  });
+    })
+    .select()
+    .single();
+  fail(error);
+  return mapUser(data);
 }
 
-export function setUserStatus(
+export async function setUserStatus(
   userId: string,
   status: "active" | "locked"
-): UserAccount | null {
-  return mutateDb((db) => {
-    const user = db.users.find((u) => u.id === userId);
-    if (!user || user.role === "owner") return null;
-    user.status = status;
-    return user;
-  });
+): Promise<UserAccount | null> {
+  // Matches the old "not found OR is owner -> null" rule in a single
+  // round-trip: the extra .neq("role", "owner") means the update simply
+  // touches zero rows (and returns null) when the target is the owner.
+  const { data, error } = await supabase
+    .from("users")
+    .update({ status })
+    .eq("id", userId)
+    .neq("role", "owner")
+    .select()
+    .maybeSingle();
+  fail(error);
+  return data ? mapUser(data) : null;
 }
 
-export function resetUserPassword(
+export async function resetUserPassword(
   userId: string,
   newPassword: string
-): UserAccount | null {
-  return mutateDb((db) => {
-    const user = db.users.find((u) => u.id === userId);
-    if (!user) return null;
-    user.passwordHash = bcrypt.hashSync(newPassword, 10);
-    return user;
-  });
+): Promise<UserAccount | null> {
+  const { data, error } = await supabase
+    .from("users")
+    .update({ password_hash: bcrypt.hashSync(newPassword, 10) })
+    .eq("id", userId)
+    .select()
+    .maybeSingle();
+  fail(error);
+  return data ? mapUser(data) : null;
 }
 
-export function deleteStaffUser(userId: string): boolean {
-  return mutateDb((db) => {
-    const user = db.users.find((u) => u.id === userId);
-    if (!user || user.role === "owner") return false;
-    db.users = db.users.filter((u) => u.id !== userId);
-    return true;
-  });
+export async function deleteStaffUser(userId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("users")
+    .delete()
+    .eq("id", userId)
+    .neq("role", "owner")
+    .select()
+    .maybeSingle();
+  fail(error);
+  return !!data;
 }
 
 export function verifyPassword(plain: string, hash: string): boolean {
@@ -190,49 +352,56 @@ export function verifyPassword(plain: string, hash: string): boolean {
 
 // ---------- Orders ----------
 
-function attachItems(order: Order, allItems: OrderItem[]): OrderWithItems {
-  return { ...order, items: allItems.filter((i) => i.orderId === order.id) };
+export async function getOrders(scope: "all" | "recent" = "all"): Promise<OrderWithItems[]> {
+  let query = supabase
+    .from("orders")
+    .select(ORDER_WITH_ITEMS_SELECT)
+    .order("created_at", { ascending: false });
+
+  if (scope === "recent") {
+    const cutoffIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    // Same rule as before: keep every order that's still active (pending/
+    // preparing/ready) regardless of age, PLUS anything created in the last
+    // 24h even if it's already completed/cancelled.
+    query = query.or(`status.in.(pending,preparing,ready),created_at.gte.${cutoffIso}`);
+  }
+
+  const { data, error } = await query;
+  fail(error);
+  return (data ?? []).map(mapOrderWithItems);
 }
 
-export function getOrders(scope: "all" | "recent" = "all"): OrderWithItems[] {
-  const db = readDb();
-  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-  const active: OrderStatus[] = ["pending", "preparing", "ready"];
-  return [...db.orders]
-    .filter((o) => {
-      if (scope === "all") return true;
-      if (active.includes(o.status)) return true;
-      return new Date(o.createdAt).getTime() >= cutoff;
-    })
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .map((o) => attachItems(o, db.orderItems));
+export async function getOrderById(orderId: string): Promise<OrderWithItems | undefined> {
+  const { data, error } = await supabase
+    .from("orders")
+    .select(ORDER_WITH_ITEMS_SELECT)
+    .eq("id", orderId)
+    .maybeSingle();
+  fail(error);
+  return data ? mapOrderWithItems(data) : undefined;
 }
 
-export function getOrderById(orderId: string): OrderWithItems | undefined {
-  const db = readDb();
-  const order = db.orders.find((o) => o.id === orderId);
-  if (!order) return undefined;
-  return attachItems(order, db.orderItems);
-}
-
-export function findOrdersForTracking(
+export async function findOrdersForTracking(
   code?: string,
   phone?: string
-): OrderWithItems[] {
-  const db = readDb();
+): Promise<OrderWithItems[]> {
   const normalizedCode = code?.trim().toUpperCase();
   const normalizedPhone = phone?.trim();
-  const matches = db.orders.filter((o) => {
-    const codeMatch = normalizedCode ? o.code === normalizedCode : false;
-    const phoneMatch = normalizedPhone
-      ? o.customerPhone === normalizedPhone
-      : false;
-    if (normalizedCode && normalizedPhone) return codeMatch && phoneMatch;
-    return codeMatch || phoneMatch;
-  });
-  return matches
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .map((o) => attachItems(o, db.orderItems));
+
+  if (!normalizedCode && !normalizedPhone) return [];
+
+  let query = supabase.from("orders").select(ORDER_WITH_ITEMS_SELECT);
+  if (normalizedCode && normalizedPhone) {
+    query = query.eq("code", normalizedCode).eq("customer_phone", normalizedPhone);
+  } else if (normalizedCode) {
+    query = query.eq("code", normalizedCode);
+  } else {
+    query = query.eq("customer_phone", normalizedPhone!);
+  }
+
+  const { data, error } = await query.order("created_at", { ascending: false });
+  fail(error);
+  return (data ?? []).map(mapOrderWithItems);
 }
 
 export interface CreateOrderInput {
@@ -244,94 +413,117 @@ export interface CreateOrderInput {
   items: { menuItemId: string; quantity: number; note?: string }[];
 }
 
-export function createOrder(
+export async function createOrder(
   input: CreateOrderInput
-): OrderWithItems | { error: string } {
-  return mutateDb((db) => {
-    if (input.items.length === 0) {
-      return { error: "Giỏ hàng đang trống." };
-    }
-    let total = 0;
-    const items: OrderItem[] = [];
-    for (const line of input.items) {
-      const menuItem = db.menuItems.find((m) => m.id === line.menuItemId);
-      if (!menuItem) return { error: "Một món trong giỏ hàng không còn tồn tại." };
-      if (!menuItem.available) {
-        return { error: `${menuItem.name} hiện đã hết hàng.` };
-      }
-      total += menuItem.price * line.quantity;
-      items.push({
-        id: genId("oi"),
-        orderId: "",
-        menuItemId: menuItem.id,
-        name: menuItem.name,
-        unitPrice: menuItem.price,
-        quantity: line.quantity,
-        note: line.note ?? "",
-      });
-    }
+): Promise<OrderWithItems | { error: string }> {
+  if (input.items.length === 0) {
+    return { error: "Giỏ hàng đang trống." };
+  }
 
-    let code = genOrderCode();
-    while (db.orders.some((o) => o.code === code)) {
-      code = genOrderCode();
-    }
+  const menuItemIds = input.items.map((i) => i.menuItemId);
+  const { data: menuRows, error: menuError } = await supabase
+    .from("menu_items")
+    .select("*")
+    .in("id", menuItemIds);
+  fail(menuError);
+  const menuItems = (menuRows ?? []).map(mapMenuItem);
 
-    const now = new Date().toISOString();
-    const orderId = genId("order");
-    const order: Order = {
-      id: orderId,
+  let total = 0;
+  const itemsPayload: {
+    menu_item_id: string;
+    name: string;
+    unit_price: number;
+    quantity: number;
+    note: string;
+  }[] = [];
+  for (const line of input.items) {
+    const menuItem = menuItems.find((m) => m.id === line.menuItemId);
+    if (!menuItem) return { error: "Một món trong giỏ hàng không còn tồn tại." };
+    if (!menuItem.available) {
+      return { error: `${menuItem.name} hiện đã hết hàng.` };
+    }
+    total += menuItem.price * line.quantity;
+    itemsPayload.push({
+      menu_item_id: menuItem.id,
+      name: menuItem.name,
+      unit_price: menuItem.price,
+      quantity: line.quantity,
+      note: line.note ?? "",
+    });
+  }
+
+  let code = genOrderCode();
+  for (;;) {
+    const { data: existing } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("code", code)
+      .maybeSingle();
+    if (!existing) break;
+    code = genOrderCode();
+  }
+
+  const { data: orderRow, error: orderError } = await supabase
+    .from("orders")
+    .insert({
       code,
-      customerName: input.customerName,
-      customerPhone: input.customerPhone,
-      fulfillmentType: input.fulfillmentType,
-      tableNumber: input.fulfillmentType === "dine_in" ? input.tableNumber ?? null : null,
+      customer_name: input.customerName,
+      customer_phone: input.customerPhone,
+      fulfillment_type: input.fulfillmentType,
+      table_number: input.fulfillmentType === "dine_in" ? input.tableNumber ?? null : null,
       status: "pending",
-      paymentStatus: "unpaid",
-      paymentConfirmedAt: null,
-      paymentConfirmedBy: null,
-      totalAmount: total,
+      payment_status: "unpaid",
+      total_amount: total,
       note: input.note ?? "",
-      cancelReason: null,
-      createdAt: now,
-      updatedAt: now,
-    };
-    items.forEach((it) => (it.orderId = orderId));
-    db.orders.push(order);
-    db.orderItems.push(...items);
-    return attachItems(order, db.orderItems);
-  });
+    })
+    .select()
+    .single();
+  fail(orderError);
+
+  const { data: itemRows, error: itemsError } = await supabase
+    .from("order_items")
+    .insert(itemsPayload.map((it) => ({ ...it, order_id: orderRow.id })))
+    .select();
+  fail(itemsError);
+
+  return { ...mapOrder(orderRow), items: (itemRows ?? []).map(mapOrderItem) };
 }
 
-export function updateOrderStatus(
+export async function updateOrderStatus(
   orderId: string,
   status: OrderStatus,
   cancelReason?: string
-): OrderWithItems | null {
-  return mutateDb((db) => {
-    const order = db.orders.find((o) => o.id === orderId);
-    if (!order) return null;
-    order.status = status;
-    order.updatedAt = new Date().toISOString();
-    if (status === "cancelled") {
-      order.cancelReason = cancelReason ?? "Không rõ lý do";
-    }
-    return attachItems(order, db.orderItems);
-  });
+): Promise<OrderWithItems | null> {
+  const payload: Record<string, unknown> = { status };
+  if (status === "cancelled") {
+    payload.cancel_reason = cancelReason ?? "Không rõ lý do";
+  }
+  const { data, error } = await supabase
+    .from("orders")
+    .update(payload)
+    .eq("id", orderId)
+    .select(ORDER_WITH_ITEMS_SELECT)
+    .maybeSingle();
+  fail(error);
+  return data ? mapOrderWithItems(data) : null;
 }
 
-export function confirmOrderPayment(
+export async function confirmOrderPayment(
   orderId: string,
   confirmedByUserId: string
-): OrderWithItems | null {
-  return mutateDb((db) => {
-    const order = db.orders.find((o) => o.id === orderId);
-    if (!order) return null;
-    order.paymentStatus = "paid";
-    order.paymentConfirmedAt = new Date().toISOString();
-    order.paymentConfirmedBy = confirmedByUserId;
-    order.updatedAt = order.paymentConfirmedAt;
-    return attachItems(order, db.orderItems);
-  });
+): Promise<OrderWithItems | null> {
+  const { data, error } = await supabase
+    .from("orders")
+    .update({
+      payment_status: "paid",
+      payment_confirmed_at: new Date().toISOString(),
+      payment_confirmed_by: confirmedByUserId,
+    })
+    .eq("id", orderId)
+    .select(ORDER_WITH_ITEMS_SELECT)
+    .maybeSingle();
+  fail(error);
+  return data ? mapOrderWithItems(data) : null;
 }
 
 // ---------- Revenue report ----------
@@ -344,17 +536,23 @@ export interface RevenueReport {
   topItems: { menuItemId: string; name: string; quantity: number; revenue: number }[];
 }
 
-export function getRevenueReport(fromISO: string, toISO: string): RevenueReport {
-  const db = readDb();
-  const from = new Date(fromISO).getTime();
-  const to = new Date(toISO).getTime();
+export async function getRevenueReport(fromISO: string, toISO: string): Promise<RevenueReport> {
+  const from = new Date(fromISO).toISOString();
+  const to = new Date(toISO).toISOString();
 
-  const eligibleOrders = db.orders.filter((o) => {
-    if (o.paymentStatus !== "paid" || o.status === "cancelled") return false;
-    if (!o.paymentConfirmedAt) return false;
-    const t = new Date(o.paymentConfirmedAt).getTime();
-    return t >= from && t <= to;
-  });
+  // Same eligibility rule as before (paid AND not cancelled AND confirmed
+  // within range), just expressed as a database filter instead of an
+  // in-memory Array.filter - the aggregation math below is untouched.
+  const { data, error } = await supabase
+    .from("orders")
+    .select(ORDER_WITH_ITEMS_SELECT)
+    .eq("payment_status", "paid")
+    .neq("status", "cancelled")
+    .gte("payment_confirmed_at", from)
+    .lte("payment_confirmed_at", to);
+  fail(error);
+
+  const eligibleOrders = (data ?? []).map(mapOrderWithItems);
 
   const totalRevenue = eligibleOrders.reduce((sum, o) => sum + o.totalAmount, 0);
   const paidOrderCount = eligibleOrders.length;
@@ -372,18 +570,18 @@ export function getRevenueReport(fromISO: string, toISO: string): RevenueReport 
     .map(([date, v]) => ({ date, ...v }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  const eligibleOrderIds = new Set(eligibleOrders.map((o) => o.id));
   const itemAgg = new Map<string, { name: string; quantity: number; revenue: number }>();
-  for (const oi of db.orderItems) {
-    if (!eligibleOrderIds.has(oi.orderId)) continue;
-    const entry = itemAgg.get(oi.menuItemId) ?? {
-      name: oi.name,
-      quantity: 0,
-      revenue: 0,
-    };
-    entry.quantity += oi.quantity;
-    entry.revenue += oi.quantity * oi.unitPrice;
-    itemAgg.set(oi.menuItemId, entry);
+  for (const o of eligibleOrders) {
+    for (const oi of o.items) {
+      const entry = itemAgg.get(oi.menuItemId) ?? {
+        name: oi.name,
+        quantity: 0,
+        revenue: 0,
+      };
+      entry.quantity += oi.quantity;
+      entry.revenue += oi.quantity * oi.unitPrice;
+      itemAgg.set(oi.menuItemId, entry);
+    }
   }
   const topItems = [...itemAgg.entries()]
     .map(([menuItemId, v]) => ({ menuItemId, ...v }))

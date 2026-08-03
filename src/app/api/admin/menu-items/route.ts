@@ -8,7 +8,7 @@ const FALLBACK_IMAGE = "/menu-images/hero-cafe.jpg";
 export async function GET() {
   const guard = await requireSession(["owner", "staff"]);
   if ("error" in guard) return guard.error;
-  return NextResponse.json({ items: getMenuItems() });
+  return NextResponse.json({ items: await getMenuItems() });
 }
 
 function validate(body: Partial<MenuItemInput>): string | null {
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   const error = validate(body);
   if (error) return NextResponse.json({ message: error }, { status: 400 });
 
-  const item = createMenuItem({
+  const item = await createMenuItem({
     name: body.name!.trim(),
     categoryId: body.categoryId!,
     description: body.description?.trim() ?? "",
