@@ -1,5 +1,5 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
-
+Currently online on [Cloudflare web](https://bai-7-code-web-demo.ptbinh.workers.dev/). 
 ## Getting Started
 
 First, run the development server:
