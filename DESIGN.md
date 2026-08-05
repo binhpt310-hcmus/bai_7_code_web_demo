@@ -109,6 +109,15 @@ Bảng dưới gợi ý nên lấy cảm hứng/component nào từ 2 nguồn ch
 
 - Hiển thị mã đơn to, rõ, cùng thanh tiến trình 4 bước (Chờ xác nhận - Đang pha chế - Sẵn sàng - Hoàn tất), bước hiện tại được nhấn bằng màu accent, các bước còn lại màu trung tính.
 - Tự làm mới trạng thái mà không cần khách bấm F5 (poll định kỳ vài giây, hoặc realtime subscription nếu dùng Supabase Realtime).
+- Kèm 1 mã QR nhỏ (dùng dịch vụ miễn phí `api.qrserver.com`, không cần khóa API) trỏ tới chính trang theo dõi đơn này, đặt trong khối card hiện có (không tách thành card riêng), để khách quét bằng thiết bị khác mà không cần gõ lại mã đơn.
+
+### 5.8 Thời tiết, bản đồ và Trợ lý gợi ý món (Client - mở rộng)
+
+- Khối "Thời tiết & bản đồ" đặt cuối trang chủ (sau lưới thực đơn, trước footer), bố cục 2 cột ngang hàng trên desktop (`md:grid-cols-2`), xếp dọc trên mobile: 1 card thời tiết + 1 card bản đồ, cùng dùng `bg-surface`, `rounded-2xl`, `shadow-soft` như các card khác trong hệ thống, không phát sinh màu nền mới.
+- Card thời tiết lấy dữ liệu từ Open-Meteo (không cần khóa API), hiển thị nhiệt độ lớn + icon thời tiết (map từ mã WMO sang icon Phosphor có sẵn), kèm độ ẩm và tốc độ gió ở hàng phụ. Bắt buộc có 3 trạng thái: đang tải (skeleton `animate-pulse`), lỗi (thông báo ngắn gọn, không làm sập trang), và sẵn sàng.
+- Card bản đồ nhúng OpenStreetMap qua `iframe` (không cần khóa API), khung tỉ lệ cố định (`aspect-[4/3]`/`aspect-[16/10]`), kèm nút phụ "Mở trong Google Maps" dạng viền (`border-border`), không dùng màu accent cho nút phụ này để giữ đúng 1 màu nhấn chính của site.
+- Trợ lý gợi ý món là 1 nút tròn nổi (floating action button) góc dưới phải, dùng `bg-accent`/`shadow-soft-lg`, mở ra 1 panel nhỏ chứa các nút chọn nhanh dạng preset (Ít ngọt, Healthy/Ít calo, Giải nhiệt, Cần năng lượng, Đói bụng/ăn nhẹ) - **không có ô nhập văn bản tự do**, đúng tinh thần "logic đơn giản, rule-based" của PRD (Mục 4.1, C9).
+- Kết quả gợi ý hiển thị dạng thẻ nhỏ (ảnh + tên + giá) ngay trong panel; bấm vào thẻ phải mở đúng modal chi tiết món đang dùng chung cho toàn site (Mục 4 - Dialog/Responsive Modal), không mở luồng thêm giỏ hàng riêng biệt, để trải nghiệm nhất quán với việc bấm vào 1 thẻ món bình thường trên trang chủ.
 
 ### 5.4 Bảng điều khiển đơn hàng (Admin - Owner + Staff)
 

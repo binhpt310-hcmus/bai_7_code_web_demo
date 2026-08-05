@@ -8,6 +8,8 @@ import { CategoryTabs } from "./CategoryTabs";
 import { ProductCard } from "./ProductCard";
 import { ProductDetailModal } from "./ProductDetailModal";
 import { CartDrawer } from "./CartDrawer";
+import { WeatherMapSection } from "./WeatherMapSection";
+import { RecommendWidget } from "./RecommendWidget";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 export function ClientHome({
@@ -97,6 +99,8 @@ export function ClientHome({
         )}
       </main>
 
+      <WeatherMapSection />
+
       <footer className="border-t border-border/70 py-8 text-center text-sm text-muted">
         <p>Rang Mộc Coffee - 24 Nguyễn Huệ, Quận 1, TP.HCM</p>
         <p className="mt-1">Mở cửa 07:00 - 22:00 hằng ngày</p>
@@ -104,6 +108,7 @@ export function ClientHome({
 
       <ProductDetailModal item={selected} onClose={() => setSelected(null)} />
       <CartDrawer />
+      <RecommendWidget items={items} categories={categories} onSelectItem={setSelected} />
     </>
   );
 }

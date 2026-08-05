@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CheckCircleIcon,
   MagnifyingGlassIcon,
+  QrCodeIcon,
   ReceiptIcon,
   XCircleIcon,
 } from "@phosphor-icons/react/ssr";
@@ -86,6 +87,14 @@ export function TrackClient({ initialCode }: { initialCode: string }) {
   }, [order?.status, order?.id]);
 
   const activeStepIndex = order ? STEPS.findIndex((s) => s.key === order.status) : -1;
+
+  // Ma QR tro toi chinh trang theo doi don hang nay (kem san ma don), de khach
+  // co the quet bang mot thiet bi khac va xem ngay trang thai, khong can go lai.
+  const qrCodeUrl = order
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
+        `${typeof window !== "undefined" ? window.location.origin : ""}/track?code=${order.code}`
+      )}`
+    : "";
 
   return (
     <>
@@ -224,6 +233,29 @@ export function TrackClient({ initialCode }: { initialCode: string }) {
               Đặt lúc {formatDateTime(order.createdAt)} · Trạng thái xử lý:{" "}
               {ORDER_STATUS_LABEL[order.status]}
             </p>
+
+            <div className="flex items-center gap-4 border-t border-border pt-4">
+              <div className="shrink-0 overflow-hidden rounded-xl border border-border bg-white p-1.5">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={qrCodeUrl}
+                  alt={`Mã QR theo dõi đơn hàng ${order.code}`}
+                  width={104}
+                  height={104}
+                  className="h-[104px] w-[104px]"
+                />
+              </div>
+              <div>
+                <p className="flex items-center gap-1.5 text-sm font-medium text-ink">
+                  <QrCodeIcon size={16} weight="bold" className="text-accent" />
+                  Quét để xem trên thiết bị khác
+                </p>
+                <p className="mt-1 max-w-xs text-sm text-muted">
+                  Đưa mã này cho người thân hoặc quét bằng điện thoại khác để cùng theo dõi
+                  đơn hàng, không cần nhập lại mã.
+                </p>
+              </div>
+            </div>
           </div>
         )}
       </main>

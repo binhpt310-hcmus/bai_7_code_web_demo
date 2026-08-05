@@ -85,6 +85,9 @@ Chủ quán và nhân viên dùng chung một khu vực Admin, chỉ khác nhau 
 | C5 | Đặt hàng (checkout) | Chọn hình thức nhận (mang đi/tại quán + số bàn), nhập tên và số điện thoại liên hệ, xác nhận đặt hàng |
 | C6 | Theo dõi đơn hàng | Xem trạng thái đơn theo mã đơn hoặc số điện thoại, cập nhật real-time hoặc auto-refresh |
 | C7 | Tài khoản khách hàng (tùy chọn) | Đăng ký/đăng nhập đơn giản (email hoặc số điện thoại + mật khẩu) để lưu lịch sử đơn hàng |
+| C8 | Thời tiết & bản đồ quán | Widget hiển thị thời tiết hiện tại (nhiệt độ, độ ẩm, gió) tại vị trí quán, lấy từ API thời tiết miễn phí không cần khóa API (Open-Meteo); kèm bản đồ nhúng (OpenStreetMap, không cần khóa API) và liên kết mở Google Maps |
+| C9 | Trợ lý gợi ý món (rule-based) | Widget nổi cho khách chọn nhanh 1 trong các nhu cầu có sẵn (Ít ngọt, Healthy/Ít calo, Giải nhiệt, Cần năng lượng, Đói bụng/ăn nhẹ - không có ô nhập tự do), hệ thống so khớp từ khóa với tên/mô tả/danh mục món để gợi ý tối đa vài món phù hợp; bấm vào món gợi ý sẽ mở đúng modal chi tiết món đó |
+| C10 | Mã QR theo dõi đơn hàng | Bổ sung cho C6: trang theo dõi đơn hàng sinh thêm 1 mã QR trỏ tới chính trang theo dõi đơn đó (kèm mã đơn), dùng dịch vụ tạo QR miễn phí (api.qrserver.com), giúp khách quét bằng thiết bị khác để cùng xem trạng thái mà không cần gõ lại mã đơn |
 
 ### 4.2 Phía Admin - dùng chung cho Owner và Staff
 
