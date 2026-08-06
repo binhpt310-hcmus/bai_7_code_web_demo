@@ -10,6 +10,7 @@ import { ProductDetailModal } from "./ProductDetailModal";
 import { CartDrawer } from "./CartDrawer";
 import { WeatherMapSection } from "./WeatherMapSection";
 import { RecommendWidget } from "./RecommendWidget";
+import { ChatWidget } from "@/components/shared/ChatWidget";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 export function ClientHome({
@@ -109,6 +110,13 @@ export function ClientHome({
       <ProductDetailModal item={selected} onClose={() => setSelected(null)} />
       <CartDrawer />
       <RecommendWidget items={items} categories={categories} onSelectItem={setSelected} />
+      <ChatWidget
+        storageKey="rang-moc-chat-customer-v1"
+        title="Trợ lý Rang Mộc"
+        greeting="Chào bạn! Mình có thể giới thiệu thực đơn, gợi ý món và tra cứu đơn hàng của bạn. Bạn cần gì?"
+        showOrderLookup
+        positionClassName="fixed bottom-24 right-4 z-30 sm:bottom-28 sm:right-6"
+      />
     </>
   );
 }

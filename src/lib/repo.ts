@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { supabase } from "./supabase";
 import type {
   Category,
+  ChatbotConfig,
   FulfillmentType,
   MenuItem,
   Order,
@@ -589,4 +590,71 @@ export async function getRevenueReport(fromISO: string, toISO: string): Promise<
     .slice(0, 8);
 
   return { totalRevenue, paidOrderCount, averageOrderValue, dailySeries, topItems };
+}
+
+// ---------- Chatbot config ----------
+
+function mapChatbotConfig(row: Record<string, unknown>): ChatbotConfig {
+  return {
+    id: row.id as string,
+    isEnabled: row.is_enabled as boolean,
+    providerBaseUrl: (row.provider_base_url as string | null) ?? null,
+    providerApiKey: (row.provider_api_key as string | null) ?? null,
+    modelId: row.model_id as string,
+    modelName: row.model_name as string,
+    systemPrompt: row.system_prompt as string,
+    maxOutputTokens: row.max_output_tokens as number,
+    contextWindowTokens: row.context_window_tokens as number,
+    updatedAt: row.updated_at as string,
+    updatedBy: (row.updated_by as string | null) ?? null,
+  };
+}
+
+export async function getChatbotConfig(): Promise<ChatbotConfig> {
+  const { data, error } = await supabase
+    .from("chatbot_settings")
+    .select("*")
+    .limit(1)
+    .maybeSingle();
+  fail(error);
+  if (!data) {
+    throw new Error("Chưa có cấu hình chatbot trong cơ sở dữ liệu. Chạy lại supabase/schema.sql.");
+  }
+  return mapChatbotConfig(data);
+}
+
+export interface ChatbotConfigInput {
+  isEnabled?: boolean;
+  providerBaseUrl?: string | null;
+  providerApiKey?: string | null;
+  modelId?: string;
+  modelName?: string;
+  systemPrompt?: string;
+  maxOutputTokens?: number;
+  contextWindowTokens?: number;
+}
+
+export async function updateChatbotConfig(
+  id: string,
+  input: ChatbotConfigInput,
+  updatedByUserId: string
+): Promise<ChatbotConfig> {
+  const payload: Record<string, unknown> = { updated_by: updatedByUserId };
+  if (input.isEnabled !== undefined) payload.is_enabled = input.isEnabled;
+  if (input.providerBaseUrl !== undefined) payload.provider_base_url = input.providerBaseUrl;
+  if (input.providerApiKey !== undefined) payload.provider_api_key = input.providerApiKey;
+  if (input.modelId !== undefined) payload.model_id = input.modelId;
+  if (input.modelName !== undefined) payload.model_name = input.modelName;
+  if (input.systemPrompt !== undefined) payload.system_prompt = input.systemPrompt;
+  if (input.maxOutputTokens !== undefined) payload.max_output_tokens = input.maxOutputTokens;
+  if (input.contextWindowTokens !== undefined) payload.context_window_tokens = input.contextWindowTokens;
+
+  const { data, error } = await supabase
+    .from("chatbot_settings")
+    .update(payload)
+    .eq("id", id)
+    .select()
+    .single();
+  fail(error);
+  return mapChatbotConfig(data);
 }

@@ -78,3 +78,24 @@ export interface SessionPayload {
   name: string;
   username: string;
 }
+
+export interface ChatbotConfig {
+  id: string;
+  isEnabled: boolean;
+  providerBaseUrl: string | null;
+  providerApiKey: string | null;
+  modelId: string;
+  modelName: string;
+  systemPrompt: string;
+  maxOutputTokens: number;
+  contextWindowTokens: number;
+  updatedAt: string;
+  updatedBy: string | null;
+}
+
+export type ChatMessageRole = "user" | "assistant";
+
+export interface ChatMessage {
+  role: ChatMessageRole;
+  content: string;
+}

@@ -37,6 +37,7 @@ create extension if not exists pgcrypto;
 -- -----------------------------------------------------------------------------
 -- 1. Cleanup (cho phep chay lai script an toan)
 -- -----------------------------------------------------------------------------
+drop table if exists chatbot_settings cascade;
 drop table if exists order_items cascade;
 drop table if exists orders cascade;
 drop table if exists menu_items cascade;
@@ -154,6 +155,31 @@ create table order_items (
 );
 create index idx_order_items_order_id on order_items(order_id);
 
+-- Cau hinh chatbot AI (mot dong duy nhat, chinh sua o /admin/settings, chi
+-- Owner duoc phep). provider_base_url/provider_api_key co the de trong (NULL)
+-- de app fallback ve bien moi truong COMMAND_CODE_API_URL/COMMAND_CODE_API_KEY
+-- - nghia la Owner khong bat buoc phai nhap lai API key o day, chi dung khi
+-- muon doi sang provider/API key khac voi bien moi truong mac dinh.
+create table chatbot_settings (
+  id uuid primary key default gen_random_uuid(),
+  is_enabled boolean not null default true,
+  provider_base_url text,
+  provider_api_key text,
+  model_id text not null default 'poolside/laguna-s-2.1-free',
+  model_name text not null default 'Laguna S 2.1 (Free)',
+  system_prompt text not null default '',
+  max_output_tokens integer not null default 512 check (max_output_tokens > 0),
+  context_window_tokens integer not null default 8000 check (context_window_tokens > 0),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references users(id) on delete set null
+);
+comment on table chatbot_settings is 'Cau hinh trung tam cho tro ly AI (mot dong duy nhat). Chua provider_api_key (bi mat) nen KHONG duoc phep co RLS policy cong khai - chi Next.js server (service role key) duoc doc/ghi bang nay, giong het co che ap dung cho users/orders o Muc 4.';
+
+create trigger trg_chatbot_settings_set_updated_at
+  before update on chatbot_settings
+  for each row
+  execute function set_updated_at();
+
 -- -----------------------------------------------------------------------------
 -- 4. Row Level Security
 -- -----------------------------------------------------------------------------
@@ -163,6 +189,7 @@ alter table menu_items enable row level security;
 alter table customers enable row level security;
 alter table orders enable row level security;
 alter table order_items enable row level security;
+alter table chatbot_settings enable row level security;
 
 -- Khach (anon) va nguoi dung web duoc XEM thuc don cong khai - day la du lieu
 -- khong nhay cam, an toan de mo public (dung SELECT ... using (true)).
@@ -440,11 +467,24 @@ insert into order_items (order_id, menu_item_id, name, unit_price, quantity, not
   ((select id from orders where code = 'S3T8U'),
     (select id from menu_items where name = 'Tiramisu ly'), 'Tiramisu ly', 42000, 1, '');
 
+-- 5.5 Cau hinh chatbot AI (mot dong duy nhat). provider_base_url/provider_api_key
+-- de trong (NULL) - app se fallback ve COMMAND_CODE_API_URL/COMMAND_CODE_API_KEY
+-- trong bien moi truong cho toi khi Owner tu cau hinh rieng o /admin/settings.
+insert into chatbot_settings (
+  is_enabled, provider_base_url, provider_api_key, model_id, model_name,
+  system_prompt, max_output_tokens, context_window_tokens
+) values (
+  true, null, null, 'poolside/laguna-s-2.1-free', 'Laguna S 2.1 (Free)',
+  'Bạn là trợ lý ảo của quán Rang Mộc Coffee, đóng vai một nhân viên thực thụ: thân thiện, nhiệt tình, xưng "em" và gọi khách là "anh/chị". Nhiệm vụ của bạn: giới thiệu thực đơn, gợi ý món phù hợp theo khẩu vị/thời tiết/nhu cầu, xác nhận một món khách hỏi có đang bán hay không, và tra cứu trạng thái đơn hàng khi khách cung cấp mã đơn hoặc số điện thoại. Chỉ trả lời dựa trên dữ liệu được cung cấp trong ngữ cảnh cuộc trò chuyện, tuyệt đối không bịa đặt món ăn, giá cả hay trạng thái đơn hàng không có trong dữ liệu đó. Nếu không chắc chắn, hãy đề nghị khách liên hệ trực tiếp quán hoặc nhân viên tại quầy.',
+  512, 8000
+);
+
 -- =============================================================================
 -- Xong. Kiem tra nhanh:
---   select count(*) from categories;   -- 4
---   select count(*) from menu_items;   -- 13
---   select count(*) from users;        -- 4
---   select count(*) from orders;       -- 10
---   select count(*) from order_items;  -- 17
+--   select count(*) from categories;        -- 4
+--   select count(*) from menu_items;        -- 13
+--   select count(*) from users;             -- 4
+--   select count(*) from orders;            -- 10
+--   select count(*) from order_items;       -- 17
+--   select count(*) from chatbot_settings;  -- 1
 -- =============================================================================

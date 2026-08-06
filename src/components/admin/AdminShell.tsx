@@ -5,11 +5,13 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   ChartLineUpIcon,
   ForkKnifeIcon,
+  RobotIcon,
   SignOutIcon,
   SquaresFourIcon,
   UsersIcon,
 } from "@phosphor-icons/react/ssr";
 import type { SessionPayload } from "@/lib/types";
+import { ChatWidget } from "@/components/shared/ChatWidget";
 
 interface NavItem {
   href: string;
@@ -31,6 +33,12 @@ const NAV_ITEMS: NavItem[] = [
     href: "/admin/reports",
     label: "Báo cáo doanh thu",
     icon: <ChartLineUpIcon size={19} weight="bold" />,
+    ownerOnly: true,
+  },
+  {
+    href: "/admin/settings",
+    label: "Trợ lý AI",
+    icon: <RobotIcon size={19} weight="bold" />,
     ownerOnly: true,
   },
 ];
@@ -100,6 +108,15 @@ export function AdminShell({
       </aside>
 
       <main className="min-w-0 flex-1 bg-bg">{children}</main>
+
+      {session && (
+        <ChatWidget
+          storageKey={`rang-moc-chat-${session.role}-${session.userId}`}
+          title={session.role === "owner" ? "Trợ lý AI (Chủ quán)" : "Trợ lý AI (Nhân viên)"}
+          greeting="Chào bạn! Mình có thể hỗ trợ tra cứu thực đơn, đơn hàng và các câu hỏi vận hành. Bạn cần gì?"
+          positionClassName="fixed bottom-5 right-4 z-30 sm:bottom-6 sm:right-6"
+        />
+      )}
     </div>
   );
 }
